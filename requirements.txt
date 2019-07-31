@@ -1,0 +1,5 @@
+numpy==1.15.4
+opencv-python==4.1.0.25
+pygame==1.9.6
+virtualenv==16.4.3
+
