@@ -6,12 +6,18 @@ import time
 import cv2
 from PIL import Image
 
+SERVER_IP = "192.168.31.120"#socket.gethostname()
+SERVER_PORT = 8005
 
 # create socket and bind host
-client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client_socket.connect(('192.168.31.100', 8000))
-print("connect to: ", '192.168.31.100')
-connection = client_socket.makefile('wb')
+server_socket = socket.socket()
+server_socket.bind((SERVER_IP, SERVER_PORT))
+server_socket.listen(0)
+# accept a single connection
+print("(%s,%d): waiting for connecting ..." %(SERVER_IP,SERVER_PORT))
+connection = server_socket.accept()[0].makefile('wb')
+print("connect successfully!")
+
 cap = cv2.VideoCapture(0)
 ret = cap.set(3, 320)  # frame width
 ret = cap.set(4, 240)  # frame height
@@ -39,4 +45,5 @@ try:
     connection.write(struct.pack('<L', 0))
 finally:
     connection.close()
-    client_socket.close()
+    #client_socket.close()
+    server_socket.close()

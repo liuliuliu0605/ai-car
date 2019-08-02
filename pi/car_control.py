@@ -7,7 +7,7 @@ import time
 import sys
 import socket
 
-SERVER_IP = "192.168.31.100"
+SERVER_IP = "192.168.31.120"#socket.gethostname()
 SERVER_PORT = 8004
  
 PWMA   = 18
@@ -27,7 +27,7 @@ class rpiGPIOHelper(object):
 		print("start recving command data......")
 		self.__data = "pi"
 		
-	def up(self,speed,t_time):
+	def up(self,speed=30,t_time=0.5):
 		L_Motor.ChangeDutyCycle(speed)
 		GPIO.output(AIN2,False)#AIN2
 		GPIO.output(AIN1,True) #AIN1
@@ -37,7 +37,7 @@ class rpiGPIOHelper(object):
 		GPIO.output(BIN1,True) #BIN1
 		time.sleep(t_time)
 			
-	def stop(self,t_time):
+	def stop(self,t_time=0.5):
 		L_Motor.ChangeDutyCycle(0)
 		GPIO.output(AIN2,False)#AIN2
 		GPIO.output(AIN1,False) #AIN1
@@ -47,7 +47,7 @@ class rpiGPIOHelper(object):
 		GPIO.output(BIN1,False) #BIN1
 		time.sleep(t_time)
 			
-	def down(self,speed,t_time):
+	def down(self,speed=30,t_time=0.5):
 		L_Motor.ChangeDutyCycle(speed)
 		GPIO.output(AIN2,True)#AIN2
 		GPIO.output(AIN1,False) #AIN1
@@ -57,7 +57,7 @@ class rpiGPIOHelper(object):
 		GPIO.output(BIN1,False) #BIN1
 		time.sleep(t_time)
 
-	def left(self,speed,t_time):
+	def left(self,speed=30,t_time=0.5):
 		L_Motor.ChangeDutyCycle(speed)
 		GPIO.output(AIN2,True)#AIN2
 		GPIO.output(AIN1,False) #AIN1
@@ -67,7 +67,7 @@ class rpiGPIOHelper(object):
 		GPIO.output(BIN1,True) #BIN1
 		time.sleep(t_time)
 
-	def right(self,speed,t_time):
+	def right(self,speed=30,t_time=0.5):
 		L_Motor.ChangeDutyCycle(speed)
 		GPIO.output(AIN2,False)#AIN2
 		GPIO.output(AIN1,True) #AIN1
@@ -124,16 +124,23 @@ if __name__ == '__main__':
 	
 	# ============socket================ #
 	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	s.connect((SERVER_IP, SERVER_PORT))
+	s.bind((SERVER_IP, SERVER_PORT))
+	s.listen(0)
+	print("(%s,%d): waiting for connecting ..." %(SERVER_IP, SERVER_PORT))
+	conn, addr = s.accept()
+	print("connect successfully! ")
 	# ============socket================ #
 
 	try:
 		while recv_turn:
-			pre_data = s.recv(1024).decode()
+			#pre_data = s.recv(1024).decode()
+			pre_data = conn.recv(1024).decode()
 			print(pre_data)
 			data = pre_data.split('O')[0]
 			if not data: continue
 			func = getattr(gpio_helper,data)
-			func(30, 0.5)
+			func()
 	except KeyboardInterrupt:  # When 'Ctrl+C' is pressed, the child program destroy() will be  executed.
 		gpio_helper.clean()
+		conn.close()
+		s.close()

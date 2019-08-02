@@ -1,6 +1,5 @@
 __pycache__/
 venv/
-tmp.*
 *.jpeg
 computer/training_data/*.npz
 *.pyz
