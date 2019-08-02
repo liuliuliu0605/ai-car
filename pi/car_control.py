@@ -79,6 +79,7 @@ class rpiGPIOHelper(object):
 		
 	def clean(self):
 		global recv_turn
+		self.stop()
 		GPIO.cleanup()
 		recv_turn = False
 		print("Clean Done!!!!")
@@ -111,26 +112,26 @@ def setup():
 	GPIO.setup(BIN1,GPIO.OUT)
 	GPIO.setup(BIN2,GPIO.OUT)
 	GPIO.setup(PWMB,GPIO.OUT)
-    
-if __name__ == '__main__':
-	setup()
-	keysacn()
-	L_Motor = GPIO.PWM(PWMA,100)
-	L_Motor.start(0)
-	R_Motor = GPIO.PWM(PWMB,100)
-	R_Motor.start(0)
-	gpio_helper = rpiGPIOHelper()
-	recv_turn = True
-	
-	# ============socket================ #
-	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	s.bind((SERVER_IP, SERVER_PORT))
-	s.listen(0)
-	print("(%s,%d): waiting for connecting ..." %(SERVER_IP, SERVER_PORT))
+
+setup()
+# keysacn()
+L_Motor = GPIO.PWM(PWMA, 100)
+L_Motor.start(0)
+R_Motor = GPIO.PWM(PWMB, 100)
+R_Motor.start(0)
+gpio_helper = rpiGPIOHelper()
+
+# ============socket================ #
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.bind((SERVER_IP, SERVER_PORT))
+s.listen(0)
+# ============socket================ #
+
+while True:
+	print("(%s,%d): waiting for connecting ..." % (SERVER_IP, SERVER_PORT))
 	conn, addr = s.accept()
 	print("connect successfully! ")
-	# ============socket================ #
-
+	recv_turn = True
 	try:
 		while recv_turn:
 			#pre_data = s.recv(1024).decode()
@@ -142,5 +143,9 @@ if __name__ == '__main__':
 			func()
 	except KeyboardInterrupt:  # When 'Ctrl+C' is pressed, the child program destroy() will be  executed.
 		gpio_helper.clean()
+		break
+	finally:
+		print("Lose connection.")
 		conn.close()
-		s.close()
+		setup()
+s.close()
