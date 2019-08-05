@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+# -*-coding:utf-8-*-
+"""
+This code is used to stream car camera.
+Client-Server mode is used here and stream server is listening
+port 8005 in default at car side. The default frame resolution
+is 160 * 120 (with, height).
+"""
 import io
 import socket
 import struct
@@ -6,24 +14,34 @@ import time
 import cv2
 from PIL import Image
 
-SERVER_IP = "192.168.31.120"#socket.gethostname()
-SERVER_PORT = 8005
+#from signal import signal, SIGPIPE, SIG_DFL
+#signal(SIGPIPE, SIG_DFL)
 
-# create socket and bind host
+SERVER_IP = "192.168.31.120"
+SERVER_PORT = 8005
+FRAME_WIDTH = 640
+FRAME_HEIGHT = 480
+
+# ============server socket================ #
 server_socket = socket.socket()
 server_socket.bind((SERVER_IP, SERVER_PORT))
-server_socket.listen(0)
+server_socket.listen(5)
+# ============server socket================ #
 
 cap = cv2.VideoCapture(0)
-ret = cap.set(3, 320)  # frame width
-ret = cap.set(4, 240)  # frame height
-#cap.set(15, 0.2)  # exposure
+ret = cap.set(3, FRAME_WIDTH)   # frame width
+ret = cap.set(4, FRAME_HEIGHT)  # frame height
+# ret = cap.set(15, 0.2)          # exposure, may not be supported
 
 while True:
-    # accept a single connection
-    print("(%s,%d): waiting for connecting ..." % (SERVER_IP, SERVER_PORT))
-    connection = server_socket.accept()[0].makefile('wb')
-    print("connect successfully!")
+    print("%s: Stream server(%s:%s) is waiting for connecting ..." % (
+        time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+        SERVER_IP,
+        SERVER_PORT))
+    _connection, addr = server_socket.accept()
+    connection = _connection.makefile('wb')
+    print("%s: Connect successfully!(from %s)" % (
+        time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), addr[0]))
     try:
         # with picamera.PiCamera() as camera:
         while cap.isOpened():
@@ -44,13 +62,26 @@ while True:
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
         connection.write(struct.pack('<L', 0))
-    except ConnectionResetError:
-        pass
-    except KeyboardInterrupt:  # When 'Ctrl+C' is pressed, the child program destroy() will be  executed.
+    except KeyboardInterrupt:
+        # When 'Ctrl+C' is pressed, stream server will be closed.
+        print("%s: Stream server is closed by hand." %
+              time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
         connection.close()
+        server_socket.close()
         break
-    else:
+    except ConnectionResetError:
+        # When socket is reset, stream server will wait for another client.
+        print("%s: Connection is lost abnormally." %
+              time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
+        # connection.close()        # the sentence will cause BrokenPipeError
+    except BrokenPipeError:
+        print("%s: Client request to close connection." %
+              time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
+    except Exception as e:
+        # other exception will end the server main routine.
+        print("%s: Something is wrong ..." %
+              time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
+        print(e)
         connection.close()
-    finally:
-        print("Lose connection.")
-server_socket.close()
+        server_socket.close()
+        break

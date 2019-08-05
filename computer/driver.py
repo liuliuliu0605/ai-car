@@ -1,151 +1,118 @@
+#!/usr/bin/env python3
+# -*- coding：utf-8 -*-
 import threading
-import socketserver
 import cv2
 import numpy as np
-import math
-import socket
 import time
+import os
 import pygame
+from computer.car_control import CarControl
+from computer.video_stream import VideoStream
 
 CAR_IP = "192.168.31.120"
 CONTROL_PORT = 8004
 STREAM_PORT = 8005
 
-class CarControl(object):
-
-    def __init__(self):
-        print('Request car control ...')
-        self.control_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.control_conn.connect((CAR_IP, CONTROL_PORT))
-        print('Connect successfully!')
-        self.pre_cmd = ''
-
-    def steer(self, prediction):
-        # 0: left, 1: right, 2: up, 3: stop
-        if prediction == 2:
-            self.control_conn.send('upO'.encode())
-            # time.sleep(1)
-            self.pre_cmd = 'upO'
-            print("Forward")
-        elif prediction == 0:
-            self.control_conn.send('leftO'.encode())
-            # time.sleep(1)
-            self.pre_cmd = 'leftO'
-            print("Left")
-        elif prediction == 1:
-            self.control_conn.send('rightO'.encode())
-            # time.sleep(1)
-            self.pre_cmd = 'rightO'
-            print("Right")
-        elif prediction == 3:
-            self.control_conn.send('stopO'.encode())
-            # time.sleep(1)
-            self.pre_cmd = 'stopO'
-            print("Stop")
-        else:
-            # self.stop()
-            # time.sleep(1.5)
-            self.control_conn.send(self.pre_cmd.encode())
-            print('stop')
-
-    def __del__(self):
-        time.sleep(1)
-        self.control_conn.send('cleanO'.encode())
-        self.control_conn.close()
-
-
-class VideoStream(object):
-
-    def __init__(self):
-        print("Request camera images ...")
-        self.stream_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.stream_conn.connect((CAR_IP, STREAM_PORT))
-        self.stream_conn = self.stream_conn.makefile('rb')
-        print("Connect successfully!")
-
-    def __del__(self):
-        self.stream_conn.close()
-
 
 class AutoDriver(threading.Thread):
+    """Drive car according to deep learning model.
+
+    To use this class, user need to overload function load_model() to
+    load specific model, and we take keras as an example. Also, function
+    predict should be overloaded to predict the output of image. The prediction
+    type is integer and class CarControl will transform it to specific movement
+    which can be referred with class variable "commands" in CarControl.
+    """
 
     def __init__(self):
         super(AutoDriver, self).__init__()
         #self.daemon = True  # Allow main to exit even if still running.
-        self.paused = False
-        self.stoped = False
         self.state = threading.Condition()
-        self.car_control = CarControl()
-        self.video_stream = VideoStream()
-        self.model = None
-        self.action_dict = {0: 'left', 1: 'right', 2: 'up', 3: 'stop'}
+        self.car = CarControl(CAR_IP, CONTROL_PORT)
+        self.video = VideoStream(CAR_IP, STREAM_PORT)
+        self.paused = False                 # pause auto driving if true
+        self.stoped = False                 # stop and exit if true
+        self.model = None                   # model used to predict car movement
+        self.width = None                   # image input width for model
+        self.height = None                  # image input height for model
+        self.depth = None                   # image input depth for model
 
-    def load_model(self, filename):
-        pass
+    def load_model(self, model_name):
+        """Load model in model directory for predicting later."""
+        print("Loading %s ..." % model_name)
+        from keras.models import load_model
+        self.model = load_model(os.path.join('model', model_name))
+        _, self.height, self.width, self.depth = self.model.input_shape
+        self.model.predict(np.zeros((1, self.height, self.width, self.depth)))
+        print('Done!')
 
-    def driver(self, half_image):
-        # use self.model to predict car action
-        # 0: left, 1: right, 2: up, 3: stop
+    def predict(self, img):
+        """Predict car movement according to img with model loaded
 
-        return 2
+        Args:
+            img: image with any width and height and it should be transformed
+            into the resolution used in model loaded, probably cv2.resize().
+
+        Returns:
+            int: the command id
+        """
+        #ret, half_image = cv2.threshold(half_image, 127, 255, cv2.THRESH_BINARY)
+        img_processed = cv2.resize(img, (self.width, self.height), interpolation=cv2.INTER_CUBIC)
+        img_ndarray = np.asarray(img_processed, dtype='float64') / 255.
+        img_ndarray = img_ndarray.reshape(-1, self.height, self.width, self.depth)
+        resp = self.model.predict(img_ndarray)[0]
+        prediction = int(resp.argmax(-1))
+        #print(resp, prediction)
+        return prediction
 
     def run(self):
-        print("Start driving...")
-        stream_bytes = b''
-        n = 0
+        """Start auto driving."""
+        print("Start driving ...")
         try:
-            while not self.stoped:
-                with self.state:  # 在该条件下操作
-                    stream_bytes += self.video_stream.stream_conn.read(1024)
-                    first = bytearray(stream_bytes).find(b'\xff\xd8')
-                    last = bytearray(stream_bytes).find(b'\xff\xd9')
-                    if first != -1 and last != -1:
-                        n += 1
-                        print('get image %d' % n)
-                        jpg = stream_bytes[first:last + 2]
-                        stream_bytes = stream_bytes[last + 2:]
-                        gray = cv2.imdecode(np.fromstring(jpg, dtype=np.uint8), 0)
-                        image = cv2.imdecode(np.fromstring(jpg, dtype=np.uint8), -1)
-                        # lower half of the image
-                        half_gray = gray[120:240, :]
-                        # cv2.imwrite('image.jpeg', image)
-                        # cv2.imwrite('mlp_image.jpeg', half_gray)
-                        prediction = self.driver(half_gray)
-                        self.car_control.steer(prediction)
-                        #print(self.action_dict[prediction])
+            for image in self.video:
+                with self.state:
+                    cv2.imshow('image', image)
+                    cv2.waitKey(1)
+                    prediction = self.predict(image)
+                    print(self.car.commands[prediction])
+                    self.car.steer(prediction)
                     if self.paused:
-                        self.state.wait()  # Block execution until notified.
-            cv2.destroyAllWindows()
-        finally:
-            print("Connection closed.")
+                        self.state.wait()           # Block execution until notified.
+                if self.stoped:                     # Exit execution
+                    break
+            #cv2.destroyAllWindows()
+        except Exception as e:
+            print(e)
 
-    def resume(self):  # 用来恢复/启动run
-        with self.state:  # 在该条件下操作
+    def resume(self):
+        """Resume auto driving thread"""
+        with self.state:
             self.paused = False
-            self.state.notify()  # Unblock self if waiting.
+            self.state.notify()     # Unblock self if waiting.
 
-    def pause(self):  # 用来暂停run
-        with self.state:  # 在该条件下操作
-            self.paused = True  # Block self
-            time.sleep(1)
-            self.car_control.steer(3)
+    def pause(self):
+        """Pause auto driving thread"""
+        with self.state:
+            self.paused = True      # Block self
+            #self.car.steer('stop')
 
-    def stop(self):  # 用来暂停run
-        with self.state:  # 在该条件下操作
+    def stop(self):
+        """Stop auto driving thread"""
+        with self.state:
             self.stoped = True
-            time.sleep(1)
-            self.car_control.steer(3)
             self.state.notify()
+            # self.car.steer('stop')
 
 
 if __name__ == '__main__':
     car = AutoDriver()
+    car.load_model('cnn_320_240.h5')
     car.start()
     #time.sleep(3)
     #car.pause()
     #time.sleep(5)
     #car.resume()
-
+    '''
     pygame.init()
     display_width = 320
     display_height = 240
@@ -166,5 +133,6 @@ if __name__ == '__main__':
                     car.resume()
                 else:
                     car.pause()
+                    '''
 
 

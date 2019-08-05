@@ -1,6 +1,7 @@
 __pycache__/
 venv/
 *.jpeg
-computer/training_data/*.npz
+*.jpg
+computer/training_data/
 *.pyz
 .idea
