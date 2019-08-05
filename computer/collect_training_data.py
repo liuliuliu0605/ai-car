@@ -9,7 +9,8 @@ is 160 * 120 (with, height).
 import numpy as np
 import cv2
 import pygame
-import socket
+import sys
+sys.path.append("..")
 
 from computer.car_control import CarControl
 from computer.video_stream import VideoStream

@@ -28,11 +28,11 @@ class CarControl(object):
             assert command < len(self.commands)
             command = self.commands[command]        # change command id into real command
         if command == 'move forward':
-            self.control_conn.send('upO'.encode())
+            self.control_conn.sendall('upO'.encode())
         elif command == 'turn left':
-            self.control_conn.send('leftO'.encode())
+            self.control_conn.sendall('leftO'.encode())
         elif command == 'turn right':
-            self.control_conn.send('rightO'.encode())
+            self.control_conn.sendall('rightO'.encode())
         elif command == 'stop':
             self.control_conn.send('stopO'.encode())
         else:
@@ -47,5 +47,5 @@ class CarControl(object):
         self.control_conn.sendall('CLOSE'.encode())
 
     def __del__(self):
-        self.control_conn.send('cleanO'.encode())
+        self.control_conn.sendall('cleanO'.encode())
         self.control_conn.close()

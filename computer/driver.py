@@ -6,6 +6,9 @@ import numpy as np
 import time
 import os
 import pygame
+import sys
+sys.path.append("..")
+
 from computer.car_control import CarControl
 from computer.video_stream import VideoStream
 
@@ -28,8 +31,8 @@ class AutoDriver(threading.Thread):
         super(AutoDriver, self).__init__()
         #self.daemon = True  # Allow main to exit even if still running.
         self.state = threading.Condition()
-        self.car = CarControl(CAR_IP, CONTROL_PORT)
-        self.video = VideoStream(CAR_IP, STREAM_PORT)
+        self.car_control = CarControl(CAR_IP, CONTROL_PORT)
+        self.video_stream = VideoStream(CAR_IP, STREAM_PORT)
         self.paused = False                 # pause auto driving if true
         self.stoped = False                 # stop and exit if true
         self.model = None                   # model used to predict car movement
@@ -69,24 +72,26 @@ class AutoDriver(threading.Thread):
         """Start auto driving."""
         print("Start driving ...")
         try:
-            for image in self.video:
+            for image in self.video_stream:
                 with self.state:
                     cv2.imshow('image', image)
                     cv2.waitKey(1)
                     prediction = self.predict(image)
-                    print(self.car.commands[prediction])
-                    self.car.steer(prediction)
+                    print(self.car_control.commands[prediction])
+                    self.car_control.steer(prediction)
                     if self.paused:
+                        print("paused.....")
                         self.state.wait()           # Block execution until notified.
                 if self.stoped:                     # Exit execution
                     break
             #cv2.destroyAllWindows()
         except Exception as e:
-            print(e)
+            self.car_control.close()
 
     def resume(self):
         """Resume auto driving thread"""
         with self.state:
+            print("res")
             self.paused = False
             self.state.notify()     # Unblock self if waiting.
 
@@ -94,45 +99,46 @@ class AutoDriver(threading.Thread):
         """Pause auto driving thread"""
         with self.state:
             self.paused = True      # Block self
-            #self.car.steer('stop')
+        time.sleep(1)
+        self.car_control.steer('stop')
+
 
     def stop(self):
         """Stop auto driving thread"""
         with self.state:
             self.stoped = True
             self.state.notify()
-            # self.car.steer('stop')
+            self.car_control.steer('stop')
 
 
 if __name__ == '__main__':
     car = AutoDriver()
     car.load_model('cnn_320_240.h5')
     car.start()
-    #time.sleep(3)
-    #car.pause()
-    #time.sleep(5)
-    #car.resume()
-    '''
     pygame.init()
-    display_width = 320
-    display_height = 240
+    display_width = 200
+    display_height = 200
     gameDisplay = pygame.display.set_mode((display_width, display_height))
     pygame.display.set_caption('simulation')
     print('Press q to exit and other key to pause/resume car.')
     send_inst = True
-    while send_inst:
-        for event in pygame.event.get():
-            if event.type == pygame.KEYDOWN:
-                key_input = pygame.key.get_pressed()
-                if key_input[pygame.K_q]:
-                    print('exit')
-                    car.stop()
-                    send_inst = False
-                    break
-                elif car.paused:
-                    car.resume()
-                else:
-                    car.pause()
-                    '''
+    try:
+        while send_inst:
+            for event in pygame.event.get():
+                if event.type == pygame.KEYDOWN:
+                    key_input = pygame.key.get_pressed()
+                    if key_input[pygame.K_q]:
+                        print('exit')
+                        car.stop()
+                        car.car_control.close()
+                        send_inst = False
+                        break
+                    elif car.paused:
+                        car.resume()
+                    else:
+                        car.pause()
+    except ConnectionResetError:
+        pass
+
 
 

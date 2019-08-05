@@ -159,7 +159,7 @@ while True:
 	try:
 		while recv_turn:
 			pre_data = conn.recv(1024).decode()		# move commands: e.g. upOupOupOdownO
-			if pre_data == 'CLOSE':					# receive socket close command from client
+			if 'CLOSE' in pre_data:						# receive socket close command from client
 				break
 			data = pre_data.split('O')[0]			# choose the first command
 			if not data:
@@ -187,7 +187,7 @@ while True:
 		print(e)
 		rpiGPIOHelper.clean()
 		conn.close()
-		server_socket.clean()
+		server_socket.close()
 	else:
 		# When server receive socket close command from client.
 		rpiGPIOHelper.stop()
