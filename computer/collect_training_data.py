@@ -9,6 +9,7 @@ is 160 * 120 (with, height).
 import numpy as np
 import cv2
 import pygame
+import getopt
 import sys
 sys.path.append("..")
 
@@ -106,4 +107,20 @@ class CollectTrainingData(object):
 
 
 if __name__ == '__main__':
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "hi:c:s:", ["ip=", "controlport=", "streamport="])
+    except getopt.GetoptError:
+        print('driver.py -i <car_ip> -c <control_port> -s <stream_port>')
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-h':
+            print('driver.py -i <car_ip> -c <control_port> -s <stream_port>')
+            sys.exit()
+        elif opt in ("-i", "--ip"):
+            CAR_IP = arg
+        elif opt in ("-c", "--controlport"):
+            CONTROL_PORT = int(arg)
+        elif opt in ("-s", "--streamport"):
+            STREAM_PORT = int(arg)
+    print("Car IP: %s, Control Port: %d, Stream Port: %d" %(CAR_IP, CONTROL_PORT, STREAM_PORT))
     CollectTrainingData()

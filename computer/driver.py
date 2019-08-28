@@ -6,6 +6,7 @@ import numpy as np
 import time
 import os
 import pygame
+import getopt
 import sys
 sys.path.append("..")
 
@@ -17,7 +18,7 @@ CONTROL_PORT = 8004
 STREAM_PORT = 8005
 
 
-class AutoDriver(threading.Thread):
+class AutoDriver(object):
     """Drive car according to deep learning model.
 
     To use this class, user need to overload function load_model() to
@@ -39,9 +40,15 @@ class AutoDriver(threading.Thread):
         self.width = None                   # image input width for model
         self.height = None                  # image input height for model
         self.depth = None                   # image input depth for model
+        pygame.init()
+        display_width = 200
+        display_height = 200
+        gameDisplay = pygame.display.set_mode((display_width, display_height))
+        pygame.display.set_caption('simulation')
 
-    def load_model(self, model_name):
+    def load_model(self):
         """Load model in model directory for predicting later."""
+        model_name = 'cnn_320_240.h5'
         print("Loading %s ..." % model_name)
         from keras.models import load_model
         self.model = load_model(os.path.join('model', model_name))
@@ -71,74 +78,68 @@ class AutoDriver(threading.Thread):
     def run(self):
         """Start auto driving."""
         print("Start driving ...")
+        print('Press q to exit and other key to pause/resume car.')
         try:
             for image in self.video_stream:
-                with self.state:
-                    cv2.imshow('image', image)
-                    cv2.waitKey(1)
+                cv2.imshow('image', image)
+                cv2.waitKey(1)
+                if not self.paused:
                     prediction = self.predict(image)
                     print(self.car_control.commands[prediction])
                     self.car_control.steer(prediction)
-                    if self.paused:
-                        print("paused.....")
-                        self.state.wait()           # Block execution until notified.
-                if self.stoped:                     # Exit execution
+                for event in pygame.event.get():
+                    if event.type == pygame.KEYDOWN:
+                        key_input = pygame.key.get_pressed()
+                        if key_input[pygame.K_q]:
+                            print('exit')
+                            car.stop()
+                            car.car_control.close()
+                            break
+                        elif car.paused:
+                            car.resume()
+                        else:
+                            car.pause()
+                if self.stoped:
                     break
-            #cv2.destroyAllWindows()
         except Exception as e:
+            print(e)
             self.car_control.close()
 
     def resume(self):
         """Resume auto driving thread"""
-        with self.state:
-            print("res")
-            self.paused = False
-            self.state.notify()     # Unblock self if waiting.
+        self.paused = False
 
     def pause(self):
         """Pause auto driving thread"""
-        with self.state:
-            self.paused = True      # Block self
+        self.paused = True
         time.sleep(1)
         self.car_control.steer('stop')
 
 
     def stop(self):
         """Stop auto driving thread"""
-        with self.state:
-            self.stoped = True
-            self.state.notify()
-            self.car_control.steer('stop')
+        self.stoped = True
 
 
 if __name__ == '__main__':
-    car = AutoDriver()
-    car.load_model('cnn_320_240.h5')
-    car.start()
-    pygame.init()
-    display_width = 200
-    display_height = 200
-    gameDisplay = pygame.display.set_mode((display_width, display_height))
-    pygame.display.set_caption('simulation')
-    print('Press q to exit and other key to pause/resume car.')
-    send_inst = True
     try:
-        while send_inst:
-            for event in pygame.event.get():
-                if event.type == pygame.KEYDOWN:
-                    key_input = pygame.key.get_pressed()
-                    if key_input[pygame.K_q]:
-                        print('exit')
-                        car.stop()
-                        car.car_control.close()
-                        send_inst = False
-                        break
-                    elif car.paused:
-                        car.resume()
-                    else:
-                        car.pause()
-    except ConnectionResetError:
-        pass
-
+        opts, args = getopt.getopt(sys.argv[1:], "hi:c:s:", ["ip=", "controlport=", "streamport="])
+    except getopt.GetoptError:
+        print('driver.py -i <car_ip> -c <control_port> -s <stream_port>')
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-h':
+            print('driver.py -i <car_ip> -c <control_port> -s <stream_port>')
+            sys.exit()
+        elif opt in ("-i", "--ip"):
+            CAR_IP = arg
+        elif opt in ("-c", "--controlport"):
+            CONTROL_PORT = int(arg)
+        elif opt in ("-s", "--streamport"):
+            STREAM_PORT = int(arg)
+    print("Car IP: %s, Control Port: %d, Stream Port: %d" %(CAR_IP, CONTROL_PORT, STREAM_PORT))
+    car = AutoDriver()
+    car.load_model()
+    car.run()
 
 
